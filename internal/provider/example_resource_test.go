@@ -4,7 +4,7 @@
 package provider
 
 import (
-	"fmt"
+	"github.com/hashicorp/terraform-plugin-testing/plancheck"
 	"testing"
 
 	"github.com/hashicorp/terraform-plugin-testing/helper/resource"
@@ -15,42 +15,34 @@ func TestAccExampleResource(t *testing.T) {
 		PreCheck:                 func() { testAccPreCheck(t) },
 		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
 		Steps: []resource.TestStep{
-			// Create and Read testing
 			{
-				Config: testAccExampleResourceConfig("one"),
-				Check: resource.ComposeAggregateTestCheckFunc(
-					resource.TestCheckResourceAttr("scaffolding_example.test", "configurable_attribute", "one"),
-					resource.TestCheckResourceAttr("scaffolding_example.test", "defaulted", "example value when not configured"),
-					resource.TestCheckResourceAttr("scaffolding_example.test", "id", "example-id"),
-				),
+				Config: testExampleResource,
 			},
-			// ImportState testing
+			// Attempting an update with the same config, expect noop
 			{
-				ResourceName:      "scaffolding_example.test",
-				ImportState:       true,
-				ImportStateVerify: true,
-				// This is not normally necessary, but is here because this
-				// example code does not have an actual upstream service.
-				// Once the Read method is able to refresh information from
-				// the upstream service, this can be removed.
-				ImportStateVerifyIgnore: []string{"configurable_attribute", "defaulted"},
+				Config: testExampleResource,
+				ConfigPlanChecks: resource.ConfigPlanChecks{
+					PreApply: []plancheck.PlanCheck{
+						plancheck.ExpectResourceAction("scaffolding_example.test", plancheck.ResourceActionNoop),
+					},
+				},
 			},
-			// Update and Read testing
+			// Attempting an update with timeouts added, would expect in-place update but replace occur instead
 			{
-				Config: testAccExampleResourceConfig("two"),
-				Check: resource.ComposeAggregateTestCheckFunc(
-					resource.TestCheckResourceAttr("scaffolding_example.test", "configurable_attribute", "two"),
-				),
+				Config: testExampleResourceWithTimeouts,
+				ConfigPlanChecks: resource.ConfigPlanChecks{
+					PreApply: []plancheck.PlanCheck{
+						plancheck.ExpectResourceAction("scaffolding_example.test", plancheck.ResourceActionUpdate),
+					},
+				},
 			},
-			// Delete testing automatically occurs in TestCase
 		},
 	})
 }
 
-func testAccExampleResourceConfig(configurableAttribute string) string {
-	return fmt.Sprintf(`
-resource "scaffolding_example" "test" {
-  configurable_attribute = %[1]q
-}
-`, configurableAttribute)
-}
+const testExampleResource = `resource "scaffolding_example" "test" {}`
+const testExampleResourceWithTimeouts = `resource "scaffolding_example" "test" {
+  timeouts = {
+    create = "60s"
+  }
+}`

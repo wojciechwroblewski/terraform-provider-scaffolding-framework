@@ -6,21 +6,19 @@ package provider
 import (
 	"context"
 	"fmt"
-	"net/http"
-
+	"github.com/hashicorp/terraform-plugin-framework-timeouts/resource/timeouts"
 	"github.com/hashicorp/terraform-plugin-framework/path"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/planmodifier"
-	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringdefault"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringplanmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/types"
 	"github.com/hashicorp/terraform-plugin-log/tflog"
+	"net/http"
 )
 
 // Ensure provider defined types fully satisfy framework interfaces.
 var _ resource.Resource = &ExampleResource{}
-var _ resource.ResourceWithImportState = &ExampleResource{}
 
 func NewExampleResource() resource.Resource {
 	return &ExampleResource{}
@@ -33,9 +31,9 @@ type ExampleResource struct {
 
 // ExampleResourceModel describes the resource data model.
 type ExampleResourceModel struct {
-	ConfigurableAttribute types.String `tfsdk:"configurable_attribute"`
-	Defaulted             types.String `tfsdk:"defaulted"`
-	Id                    types.String `tfsdk:"id"`
+	Id       types.String   `tfsdk:"id"`
+	Replace  types.String   `tfsdk:"replace"`
+	Timeouts timeouts.Value `tfsdk:"timeouts"`
 }
 
 func (r *ExampleResource) Metadata(ctx context.Context, req resource.MetadataRequest, resp *resource.MetadataResponse) {
@@ -48,16 +46,6 @@ func (r *ExampleResource) Schema(ctx context.Context, req resource.SchemaRequest
 		MarkdownDescription: "Example resource",
 
 		Attributes: map[string]schema.Attribute{
-			"configurable_attribute": schema.StringAttribute{
-				MarkdownDescription: "Example configurable attribute",
-				Optional:            true,
-			},
-			"defaulted": schema.StringAttribute{
-				MarkdownDescription: "Example configurable attribute with default value",
-				Optional:            true,
-				Computed:            true,
-				Default:             stringdefault.StaticString("example value when not configured"),
-			},
 			"id": schema.StringAttribute{
 				Computed:            true,
 				MarkdownDescription: "Example identifier",
@@ -65,6 +53,19 @@ func (r *ExampleResource) Schema(ctx context.Context, req resource.SchemaRequest
 					stringplanmodifier.UseStateForUnknown(),
 				},
 			},
+			"replace": schema.StringAttribute{
+				MarkdownDescription: "Example configurable attribute that forces replacement if changed",
+				Optional:            true,
+				Computed:            true,
+				PlanModifiers: []planmodifier.String{
+					stringplanmodifier.RequiresReplace(),
+				},
+			},
+			"timeouts": timeouts.Attributes(ctx, timeouts.Opts{
+				Create: true,
+				Update: true,
+				Delete: true,
+			}),
 		},
 	}
 }
@@ -110,6 +111,7 @@ func (r *ExampleResource) Create(ctx context.Context, req resource.CreateRequest
 	// For the purposes of this example code, hardcoding a response value to
 	// save into the Terraform state.
 	data.Id = types.StringValue("example-id")
+	data.Replace = types.StringNull() // set the value to null, assume that backend did not provide a value
 
 	// Write logs using the tflog package
 	// Documentation: https://terraform.io/plugin/log
